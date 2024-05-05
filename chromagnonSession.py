@@ -35,7 +35,7 @@ def main():
     snss = chromagnon.SNSSParse.parse(sys.argv[1])
     sessionCommand = chromagnon.sessionParse.parse(snss)
     for command in sessionCommand:
-        print command
+        print('command = ',  command)
 
 if __name__ == "__main__":
     main()

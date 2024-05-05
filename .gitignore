@@ -1,0 +1,6 @@
+.hg
+.idea
+.gitignore
+.hgignore
+__pycache__
+/chromagnon/*.pyc
