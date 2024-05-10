@@ -3,4 +3,4 @@
 .gitignore
 .hgignore
 __pycache__
-/chromagnon/*.pyc
+*.pyc

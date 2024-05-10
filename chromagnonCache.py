@@ -94,8 +94,8 @@ def main():
             chromagnon.cacheParse.exportTol2t(cache)
         else:
             for entry in cache:
-                print entry
-                print "-"*80
+                print('entry = ', entry)
+                print( "-"*80)
     else:
         chromagnon.cacheParse.exportToHTML(cache, args.o)
 
