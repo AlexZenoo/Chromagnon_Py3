@@ -28,41 +28,63 @@
 
 """
 This module parses SNSS session commands used to store session states in chrome
+Энтот модуль анализирует команды сеанса SNSS, используемые для сохранения сеанса в Хромых.
 """
 
 import datetime
 import struct
 import StringIO
+# import io.StringIO # for 3 Py
 import sys
 
 import chromagnon.pickle as pickle
 import chromagnon.types as types
 
-TYPE_DICT = {'0': "CommandSetTabWindow",
-             '2': "CommandSetTabIndexInWindow",
-             '3': "CommandTabClosed",
-             '4': "CommandWindowClosed",
-             '5': "CommandTabNavigationPathPrunedFromBack",
-             '6': "CommandUpdateTabNavigation",
-             '7': "CommandSetSelectedNavigationIndex",
-             '8': "CommandSetSelectedTabInIndex",
-             '9': "CommandSetWindowType",
-             '11': "CommandTabNavigationPathPrunedFromFront",
-             '12': "CommandSetPinnedState",
-             '13': "CommandSetExtensionAppID",
-             '14': "CommandSetWindowBounds3"}
+# TYPE_DICT = {'0': "CommandSetTabWindow",
+#             '2': "CommandSetTabIndexInWindow",
+#             '3': "CommandTabClosed",
+#             '4': "CommandWindowClosed",
+#             '5': "CommandTabNavigationPathPrunedFromBack",
+#             '6': "CommandUpdateTabNavigation",
+#             '7': "CommandSetSelectedNavigationIndex",
+#             '8': "CommandSetSelectedTabInIndex",
+#             '9': "CommandSetWindowType",
+#             '11': "CommandTabNavigationPathPrunedFromFront",
+#             '12': "CommandSetPinnedState",
+#             '13': "CommandSetExtensionAppID",
+#             '14': "CommandSetWindowBounds3"}
+
+TYPE_DICT = {0: "CommandSetTabWindow",
+             2: "CommandSetTabIndexInWindow",
+             3: "CommandTabClosed",
+             4: "CommandWindowClosed",
+             5: "CommandTabNavigationPathPrunedFromBack",
+             6: "CommandUpdateTabNavigation",
+             7: "CommandSetSelectedNavigationIndex",
+             8: "CommandSetSelectedTabInIndex",
+             9: "CommandSetWindowType",
+             11: "CommandTabNavigationPathPrunedFromFront",
+             12: "CommandSetPinnedState",
+             13: "CommandSetExtensionAppID",
+             14: "CommandSetWindowBounds3"}
 
 def parse(commandList):
     """
     Given a list of SNSS command, it returns a list of SessionCommand
+    Учитывая список команд сеанса, он возвращает список команд сеанса.
     """
     output = []
 
     for command in commandList:
-        if TYPE_DICT.has_key(str(command.idType)):
+        print('command = ', command,' command.idType = ', command.idType)
+        print('str(command.idType) = ', str(command.idType))
+#        if TYPE_DICT.has_key(str(command.idType)):
+#        if TYPE_DICT.get(str(command.idType)):
+        if TYPE_DICT.get(command.idType):
             content = StringIO.StringIO(command.content)
-            commandClass = sys.modules[__name__].__dict__.get(\
-                           TYPE_DICT[str(command.idType)])
+#            commandClass = sys.modules[__name__].__dict__.get(\
+#                           TYPE_DICT[str(command.idType)])
+            commandClass = sys.modules[__name__].__dict__.get(TYPE_DICT[command.idType])
             output.append(commandClass(content))
     return output
 

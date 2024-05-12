@@ -49,6 +49,7 @@ if __name__ == '__main__':
 #        print('snss = ', snss)
 #        print('snss = ', snss, ' snss_new = ', snss_new)
         print('snss_new = ', snss_new)
+#        print('type(snss) = ', type(snss), ' type(snss_new) = ', type(snss_new))
         sessionCommand = chromagnon.sessionParse.parse(snss)
 #        print('sessionCommand = ', sessionCommand)
         print('type(sessionCommand) = ', type(sessionCommand), len(sessionCommand))
