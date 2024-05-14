@@ -35,8 +35,12 @@ import struct
 
 import types
 
+import chromagnon.__init__
+
 SNSS_MAGIC = 0x53534E53
-iterr = 0
+iterr = chromagnon.__init__.iterr
+# iterr = 0
+command_list = chromagnon.__init__.command_list
 
 def parse(path):
     """
@@ -44,6 +48,12 @@ def parse(path):
     """
     output = []
     output_new = []
+#    iterr = chromagnon.iterr
+#    iterr = chromagnon.__init__.iterr
+#    command_list = chromagnon.__init__.command_list
+#    nonlocal output_new, command_list
+#    global output_new, command_list
+    global iterr
 
     f = open(path, 'rb')
     print('f = ', f)
@@ -89,7 +99,8 @@ def parse(path):
 #        print('content = ', content.decode())
         output.append(SNSSCommand(idType, content))
         output_new.append((idType, content))
-        global iterr
+#        url_for_snss.output_new.append((idType, content))
+#        global iterr
         iterr += 1
         print('iterr = ', iterr)
 
@@ -104,10 +115,16 @@ class SNSSCommand():
         - The payload
     Гм. Идентификатор полезной нагрузки... понятно, что ничего пока не понятно. *мрачно*
     """
-
+#    command_list = list()
     def __init__(self, idType, content):
         self.idType = idType
         self.content = content
+#        command_list = dict()
+#        command_list = list()
+#        command_list[iterr] = ['id': idType]
+        command_list.append({'id': idType, 'content': content})
+#        url_for_snss.command_list.append({'id': idType, 'content': content})
 #        print('idType = ', idType)
 #        print('content = ', content)
         print('iterr init = ', iterr)
+#        print('command list = ', command_list) # рекурсивная печать — почти 2 гигабайта, и продолжало молотить... :-(

@@ -37,8 +37,14 @@ import StringIO
 # import io.StringIO # for 3 Py
 import sys
 
+# from chromagnon.__init_ import as root
+# from chromagnon.__init__ import as root
+from chromagnon import __init__ as root
 import chromagnon.pickle as pickle
 import chromagnon.types as types
+
+# iterr = chromagnon.__item__.iterr
+iterr = root.iterr
 
 # TYPE_DICT = {'0': "CommandSetTabWindow",
 #             '2': "CommandSetTabIndexInWindow",
@@ -76,8 +82,8 @@ def parse(commandList):
     output = []
 
     for command in commandList:
-        print('command = ', command,' command.idType = ', command.idType)
-        print('str(command.idType) = ', str(command.idType))
+#        print('command = ', command,' command.idType = ', command.idType)
+#        print('str(command.idType) = ', str(command.idType))
 #        if TYPE_DICT.has_key(str(command.idType)):
 #        if TYPE_DICT.get(str(command.idType)):
         if TYPE_DICT.get(command.idType):
@@ -86,18 +92,25 @@ def parse(commandList):
 #                           TYPE_DICT[str(command.idType)])
             commandClass = sys.modules[__name__].__dict__.get(TYPE_DICT[command.idType])
             output.append(commandClass(content))
+#        else:
+#            print('TYPE_DICT not GET idType = ', command.idType)
+#    print('output = ', output)
     return output
 
 class CommandSetTabWindow():
     """
     Set a Tab in a Window
+    Устанавливает вкладку в Окне?
     """
     def __init__(self, content):
         """
         content is a StringIO of the payload
+        Содержимое это строки полезной нагрузки.
         """
         # Content is Window ID on 8bits and Tab ID on 8bits
+        # Содержимое это Идентификатор окна в 8 битах, и Идентификатор вкладки в 8 битах.
         # Strange alignment : two uint8 takes 8Bytes...
+        # Странное выравнивание: два uint8 занимают 8 байт. 8-)
         self.windowId = struct.unpack(types.uint32, content.read(4))[0]
         self.tabId = struct.unpack(types.uint32, content.read(4))[0]
 

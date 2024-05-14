@@ -30,6 +30,8 @@ def log_orig():
 
 
 if __name__ == '__main__':
+#    output_new = list()
+#    command_list = list()
     log_to_file(r'F:\Python\Books_Lib\Base_YAML\temp_print_SNSS.txt')
     path = r'F:\Python\Script\Project_SNSS\paths.lst'
 #    paths = open(path, mode='r', encoding='utf-8')
@@ -50,12 +52,14 @@ if __name__ == '__main__':
 #        print('snss = ', snss, ' snss_new = ', snss_new)
         print('snss_new = ', snss_new)
 #        print('type(snss) = ', type(snss), ' type(snss_new) = ', type(snss_new))
+        print('output_new = ', output_new)
         sessionCommand = chromagnon.sessionParse.parse(snss)
 #        print('sessionCommand = ', sessionCommand)
         print('type(sessionCommand) = ', type(sessionCommand), len(sessionCommand))
         for command in sessionCommand:
             print(command)
-        print('sessionCommand[0] = ', sessionCommand[0])
-        print('sessionCommand[1] = ', sessionCommand[1])
+#        print('sessionCommand[0] = ', sessionCommand[0])
+#        print('sessionCommand[1] = ', sessionCommand[1])
+        print('command_list = ', command_list)
     print()
     log_orig()
