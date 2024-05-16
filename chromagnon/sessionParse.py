@@ -37,16 +37,20 @@ import StringIO
 # import io.StringIO # for 3 Py
 import sys
 
+import chromagnon
+
 # from chromagnon.__init_ import as root
 # from chromagnon.__init__ import as root
 print('import 5')
-from chromagnon import __init__ as root
+# from chromagnon import __init__ as root
+# from chromagnon import *
 print('import 6')
 import chromagnon.pickle as pickle
 import chromagnon.types as types
 
 # iterr = chromagnon.__item__.iterr
-iterr = root.iterr
+# iterr = root.iterr
+iterr = chromagnon.iterr
 
 # TYPE_DICT = {'0': "CommandSetTabWindow",
 #             '2': "CommandSetTabIndexInWindow",

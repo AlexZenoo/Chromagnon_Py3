@@ -34,20 +34,29 @@ import os
 import struct
 
 import types
+
+import chromagnon
+
 print('import 4')
-import chromagnon.__init__
+# import chromagnon.__init__
+# from chromagnon import __init__ as root
 
 SNSS_MAGIC = 0x53534E53
-iterr = chromagnon.__init__.iterr
+# iterr = chromagnon.__init__.iterr
+# iterr = root.iterr
+iterr = chromagnon.iterr
 # iterr = 0
-command_list = chromagnon.__init__.command_list
+# command_list = chromagnon.__init__.command_list
+# command_list = root.command_list
+output_new = chromagnon.output_new
+command_list = chromagnon.command_list
 
 def parse(path):
     """
     Parses SNSS files and returns a list of SNSS command objects
     """
     output = []
-    output_new = []
+#    output_new = []
 #    iterr = chromagnon.iterr
 #    iterr = chromagnon.__init__.iterr
 #    command_list = chromagnon.__init__.command_list

@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 # import snss
 import sys
+
+import chromagnon # вот где ошибка! мало импортировать имя пакета!
+
 print('sys.path = ', sys.path)
 # sys.path.append(r"F:\Python\Script\Chromagnon-SNSS")
 sys.path.append(r"F:\Python\Script\Chromagnon_Py3")
 sys.path.append(r"F:\Python\Script")
 print('sys.path = ', sys.path)
 print('import 0!')
-from chromagnon import *
+# from chromagnon import *
 # sys.path.append(r"F:\Python\Script\yandex-music\yandex-music-api")
 # from yandex_music import *
 # import chromagnon
@@ -15,6 +18,7 @@ from chromagnon import *
 # import Books_lib.print_to_file
 # from Books_Lib import print_to_file
 # import Books_Lib.print_to_file
+# from chromagnon import __init__ as root
 print('import 1')
 import chromagnon.SNSSParse
 print('import 2')
@@ -36,6 +40,13 @@ def log_orig():
 if __name__ == '__main__':
 #    output_new = list()
 #    command_list = list()
+#    output_new = root.output_new
+    output_new = chromagnon.output_new
+#    command_list = root.command_list
+    command_list = chromagnon.command_list
+    print('dir chromagnon = ', dir(chromagnon))
+    print('dir chromagnon.sessionParse = ', dir(chromagnon.sessionParse))
+    print('dir chromagnon.SNSSParse = ', dir(chromagnon.SNSSParse))
     log_to_file(r'F:\Python\Books_Lib\Base_YAML\temp_print_SNSS.txt')
     path = r'F:\Python\Script\Project_SNSS\paths.lst'
 #    paths = open(path, mode='r', encoding='utf-8')
