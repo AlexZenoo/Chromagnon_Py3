@@ -6,6 +6,7 @@ print('sys.path = ', sys.path)
 sys.path.append(r"F:\Python\Script\Chromagnon_Py3")
 sys.path.append(r"F:\Python\Script")
 print('sys.path = ', sys.path)
+print('import 0!')
 from chromagnon import *
 # sys.path.append(r"F:\Python\Script\yandex-music\yandex-music-api")
 # from yandex_music import *
@@ -14,8 +15,11 @@ from chromagnon import *
 # import Books_lib.print_to_file
 # from Books_Lib import print_to_file
 # import Books_Lib.print_to_file
+print('import 1')
 import chromagnon.SNSSParse
+print('import 2')
 import chromagnon.sessionParse
+print('import 3')
 
 def log_to_file(path):
     file_path = open(path, mode='w')

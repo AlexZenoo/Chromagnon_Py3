@@ -34,7 +34,7 @@ import os
 import struct
 
 import types
-
+print('import 4')
 import chromagnon.__init__
 
 SNSS_MAGIC = 0x53534E53

@@ -39,7 +39,9 @@ import sys
 
 # from chromagnon.__init_ import as root
 # from chromagnon.__init__ import as root
+print('import 5')
 from chromagnon import __init__ as root
+print('import 6')
 import chromagnon.pickle as pickle
 import chromagnon.types as types
 
