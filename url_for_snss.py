@@ -56,7 +56,7 @@ if __name__ == '__main__':
 #        path.strip(r'\n')
 #        path.rstrip(r'\r', r'\n')
 #        path.rstrip(r'\n')
-        path.strip() # rrrrrr!
+#        path.strip() # rrrrrr!
         path = path.strip()
         print('paths = ', paths, ' path = ', path)
 #    print(snss())
@@ -76,5 +76,5 @@ if __name__ == '__main__':
 #        print('sessionCommand[0] = ', sessionCommand[0])
 #        print('sessionCommand[1] = ', sessionCommand[1])
         print('command_list = ', command_list)
-    print()
+    print('END!')
     log_orig()
