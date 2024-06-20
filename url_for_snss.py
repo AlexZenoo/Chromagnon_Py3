@@ -47,6 +47,10 @@ if __name__ == '__main__':
     print('dir chromagnon = ', dir(chromagnon))
     print('dir chromagnon.sessionParse = ', dir(chromagnon.sessionParse))
     print('dir chromagnon.SNSSParse = ', dir(chromagnon.SNSSParse))
+#    print('vars(__name__) = ', vars(__name__))
+#    print('vars(__main__) = ', vars(__main__))
+#    print('vars(__main__) = ', vars('__main__'))
+#    print('sys.modules[] = ', sys.modules, ' sys.modules[__name__] = ', sys.modules[__name__])
     log_to_file(r'F:\Python\Books_Lib\Base_YAML\temp_print_SNSS.txt')
     path = r'F:\Python\Script\Project_SNSS\paths.lst'
 #    paths = open(path, mode='r', encoding='utf-8')

@@ -41,10 +41,10 @@ import chromagnon
 
 # from chromagnon.__init_ import as root
 # from chromagnon.__init__ import as root
-print('import 5')
+# print('import 5')
 # from chromagnon import __init__ as root
 # from chromagnon import *
-print('import 6')
+# print('import 6')
 import chromagnon.pickle as pickle
 import chromagnon.types as types
 
@@ -97,6 +97,16 @@ def parse(commandList):
 #            commandClass = sys.modules[__name__].__dict__.get(\
 #                           TYPE_DICT[str(command.idType)])
             commandClass = sys.modules[__name__].__dict__.get(TYPE_DICT[command.idType])
+#            commandClass = sys.modules[__name__].get(TYPE_DICT[command.idType])
+#            print('commandClass = ', commandClass, type(commandClass))
+#            print('sys.modules[__name__].__dict__ = ', sys.modules[__name__].__dict__)
+#            print('__name__.__dict__ = ', __name__.__dict__)
+#            print('sys.modules[__name__] = ', sys.modules[__name__])
+#            print('vars().get(TYPE_DICT[command.idType]) = ', vars().get(TYPE_DICT[command.idType]))
+#            print('vars(__name__).get(TYPE_DICT[command.idType]) = ', vars(__name__).get(TYPE_DICT[command.idType]))
+#            print('TYPE_DICT[command.idType] = ', TYPE_DICT[command.idType])
+#            print('sys.modules[__name__].__dict__.get(TYPE_DICT[command.idType]) = ', sys.modules[__name__].__dict__.get(TYPE_DICT[command.idType]))
+#            print('dir(__name__) = ', dir(__name__))
             output.append(commandClass(content))
 #        else:
 #            print('TYPE_DICT not GET idType = ', command.idType)
@@ -127,13 +137,17 @@ class CommandSetTabWindow():
 class CommandSetTabIndexInWindow():
     """
     Set the Index of a Tab
+    Устанавливает индекс Таба?
     """
     def __init__(self, content):
         """
         content is a StringIO of the payload
+        content это StringIO полезное нагрузки (?)
         """
         # Content is Tab ID on 8bits and Index on 32bits
+        # Content это Tab ID в 8 битах и Index в 32 битах
         # But due to alignment Tab ID is on 32bits
+        # Но из-за выравнивания Tab ID равен 32 бита.
         self.tabId = struct.unpack(types.int32, content.read(4))[0]
         self.index = struct.unpack(types.int32, content.read(4))[0]
 
@@ -144,12 +158,15 @@ class CommandSetTabIndexInWindow():
 class CommandTabClosed():
     """
     Store closure of a Tab with Timestamp
+    Сохранение закрытия Tab с отметкой времени.
     """
     def __init__(self, content):
         # Content is Tab ID on 8bits and Close Time on 64bits
+        # Content — это Tab ID в 8 битах и время закрытия в 64 битах.
         self.tabId = struct.unpack(types.uint32, content.read(4))[0]
         self.closeTime = struct.unpack(types.int64, content.read(8))[0]
         # XXX Investigate on time format
+        # ЧЧЧ Исследование формата времени, повидимому. %-)
 #        closeTime = datetime.datetime(1601, 1, 1) + \
 #                    datetime.timedelta(microseconds=closeTime/1000)
 
@@ -160,9 +177,11 @@ class CommandTabClosed():
 class CommandWindowClosed():
     """
     Store closure of a Window with Timestamp
+    Сохранение времени закрытия окна с временной меткой.
     """
     def __init__(self, content):
         # Content is Window ID on 8bits and Close Time on 64bits
+        # Content — это Window ID в 8 битах, и время закрытия в 64 битах.
         self.windowId = struct.unpack(types.uint8, content.read(1))[0]
         self.closeTime = struct.unpack(types.int64, content.read(8))[0]
 #        closeTime = datetime.datetime(1601, 1, 1) + \
@@ -175,11 +194,14 @@ class CommandWindowClosed():
 class CommandTabNavigationPathPrunedFromBack():
     """
     TODO
+    Задача? хм.
     """
     def __init__(self, content):
         # Content is Tab ID on 8bits and Index on 32bits
+        # Content — это Tab ID в 8 битах, и Index в 32 битах.
         self.tabId = struct.unpack(types.uint8, content.read(1))[0]
         # XXX Strange results...
+        # XXX Странные результаты...
         self.index = 0#struct.unpack(types.int32, content.read(4))[0]
 
     def __str__(self):
@@ -189,6 +211,7 @@ class CommandTabNavigationPathPrunedFromBack():
 class CommandUpdateTabNavigation():
     """
     Update Tab informations
+    Обновить информацию о вкладках.
     """
     def __init__(self, content):
         content = pickle.Pickle(content)
@@ -199,7 +222,9 @@ class CommandUpdateTabNavigation():
         #print "State:", content.readString()
         #print "Transition:", (0xFF & content.readInt())
         # Content is Window ID on 8bits and Tab ID on 8bits
+        # Content — Window ID в 8 битах и Tab ID в 8 битах.
         # Strange alignment : two uint8 takes 8Bytes...
+        # Странное выравнивание: два uint8 занимают 8 байт...
 
     def __str__(self):
         return "UpdateTabNavigation - Tab: %d, Index: %d, Url: %s" % \
@@ -208,10 +233,13 @@ class CommandUpdateTabNavigation():
 class CommandSetSelectedNavigationIndex():
     """
     TODO
+    Задача!
     """
     def __init__(self, content):
         # Content is Tab ID on 8bits and Index on 32bits
+        # Content это Tab ID в 8 битах и Index в 32 битах.
         # But due to alignment Tab ID is on 32bits
+        # Но из-за выравнивания Tab ID равен 32 битам.
         self.tabId = struct.unpack(types.uint32, content.read(4))[0]
         self.index = struct.unpack(types.uint32, content.read(4))[0]
 
@@ -222,10 +250,13 @@ class CommandSetSelectedNavigationIndex():
 class CommandSetSelectedTabInIndex():
     """
     Set selected Tab in a Window
+    Установка выбранного таба в окно.
     """
     def __init__(self, content):
         # Content is Window ID on 8bits and Index on 32bits
+        # Content это Window ID в 8 битах и Index в 32 битах
         # But due to alignment Window ID is on 32bits
+        # Но из-за выравнивания Window ID равен 32 бита.
         self.windowId = struct.unpack(types.uint32, content.read(4))[0]
         self.index = struct.unpack(types.uint32, content.read(4))[0]
 
@@ -236,10 +267,13 @@ class CommandSetSelectedTabInIndex():
 class CommandSetWindowType():
     """
     Set Window Type
+    Установка вида окна.
     """
     def __init__(self, content):
         # Content is Window ID on 8bits and Window Type on 32bits
+        # Content это Window ID в 8 битах и Window Type в 32 битах.
         # But due to alignment Window ID is on 32bits
+        # Но из-за выравнивания Window ID равен 32 бита.
         self.windowId = struct.unpack(types.uint32, content.read(4))[0]
         self.windowType = struct.unpack(types.uint32, content.read(4))[0]
 
@@ -250,10 +284,13 @@ class CommandSetWindowType():
 class CommandTabNavigationPathPrunedFromFront():
     """
     TODO
+    Задача?!
     """
     def __init__(self, content):
         # Content is Tab ID on 8bits and Count on 32bits
+        # Content это Tab ID в 8 битах и Count в 32 битах. Счётчик?
         # But due to alignment Tab ID is on 32bits
+        # Но из-за выравнивания Tab ID равен 32 бита.
         self.tabId = struct.unpack(types.uint32, content.read(4))[0]
         self.count = struct.unpack(types.uint32, content.read(4))[0]
 
