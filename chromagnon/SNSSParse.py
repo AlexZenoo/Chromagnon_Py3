@@ -28,6 +28,7 @@
 
 """
 Reverse engineered from chrome/browser/sessions/*
+Реверс-инжиниринг из chrome/browser/sessions/*
 """
 
 import os
@@ -54,6 +55,7 @@ command_list = chromagnon.command_list
 def parse(path):
     """
     Parses SNSS files and returns a list of SNSS command objects
+    Парсит SNSS-файлы и возвращает список объектов команд SNSS. (?)
     """
     output = []
 #    output_new = []
@@ -90,14 +92,17 @@ def parse(path):
 
     while (end - f.tell()) > 0: # до тех пор, пока не будет достигнут конец файла
         # commandSize is a uint16
+        # commndSize равен uint16.
         commandSize = struct.unpack(types.uint16, f.read(2))[0] # следующие два байта читаются.
         print('commandSize = ', commandSize)
         if commandSize == 0:
             raise Exception("Corrupted File!")
         # idType is a uint8
+        # idType это uint8
         idType = struct.unpack(types.uint8, f.read(1))[0] # читается ещё по одному байту.
         print('idType = ', idType)
         # Size of idType is included in commandSize
+        # Размер idType включен в commandSize
         content = f.read(commandSize - 1)
         print('content = ', content)
 #        print('content = ', str(content, 'utf-8'))
@@ -123,6 +128,9 @@ class SNSSCommand():
         - An Id to identify the content of the payload
         - The payload
     Гм. Идентификатор полезной нагрузки... понятно, что ничего пока не понятно. *мрачно*
+    SNSS команда:
+        - Id для  идентификации содержимого полезной нагрузки
+        - Полезная нагрузка
     """
 #    command_list = list()
     def __init__(self, idType, content):

@@ -1,0 +1,791 @@
+
+Chrome Session and Tabs Files (and the puzzle of the pickle)
+Posted on September 3, 2012
+
+In this blog post Alex Caithness investigates the file format and contents of Chrome’s "Current Tabs", "Current Session", "Last Tabs"
+and "Last Session" files and discovers that, even with the original source code at your side, you can still end up getting yourself
+into a Pickle.
+
+A link to a Python script for automating the process can be found at the end of the post.
+
+Файлы сеансов и вкладок Chrome (и загадка огурца)
+Опубликовано 3 сентября 2012 г.
+
+В этой статье Алекс Кейтнесс исследует формат и содержимое файлов Chrome "Текущие вкладки", "Текущая сессия", "Последние вкладки" и
+"Последняя сессия" и обнаруживает, что, даже имея под рукой оригинальный исходный код, вы все равно можете попасть впросак.
+
+Ссылку на Python-скрипт для автоматизации процесса можно найти в конце поста.
+
+I’ve been on a bit of a browser artefacts kick as of late, digging around both on desktop and mobile platforms for stuff I haven’t
+tackled before. Taking a peek in my preferred browser’s (Chrome) "AppData" folder revealed that the ubiquitous-ness of SQLite as a
+storage format means that inspecting the data for a lot of artefacts has been made pretty simple. I had also recently tackled the
+Chromium web-cache format for another project (the format is now also used both on Android and RIM Playbooks) and, with the pain
+that caused me still fresh in my mind I had no desire to revisit it. There were, however, four likely looking candidates for a quick
+probing in the form of the "Current Tabs", "Current Session", "Last Tabs" and "Last Session" files.
+
+В последнее время я немного увлекаюсь артефактами браузера, копаясь как на настольных, так и на мобильных платформах в поисках вещей,
+которыми я раньше не занимался. Заглянув в папку "AppData" моего любимого браузера (Chrome), я обнаружил, что повсеместное
+распространение SQLite как формата хранения означает, что проверка данных на наличие большого количества артефактов стала довольно
+простой. Недавно я также занялся форматом веб-кэша Chromium для другого проекта (теперь этот формат также используется как в Android,
+так и в RIM Playbooks), и, поскольку причиненная мне боль все еще свежа в моей памяти, у меня не было желания возвращаться к нему.
+Однако существовало четыре вероятных кандидата на быстрое исследование в виде файлов "Текущие вкладки", "Текущий сеанс",
+"Последние вкладки" и "Последний сеанс".
+
+Broadly speaking, these files store the state of the opened tabs, their back-forward lists and the sites displayed therein. The
+files can be used by Chrome to restore your previous browsing session when you restart the browser (if that’s how you have it set up)
+or in the event of a crash. It turns out that these files can contain some really rich data, but first you had to do battle with
+the file format…
+
+Грубо говоря, эти файлы хранят состояние открытых вкладок, их списки обратного просмотра и отображаемые в них сайты. Файлы могут
+использоваться Chrome для восстановления предыдущего сеанса просмотра при перезапуске браузера (если он у вас так настроен) или в
+случае сбоя. Оказывается, эти файлы могут содержать действительно богатые данные, но сначала нужно было разобраться с форматом файла…
+
+In previous posts I’ve made mention of the usefulness of having access to the source code that governs the format in which the data
+is to be stored, and as Chrome is open source I was heartened. "This shouldn’t be too tricky," I thought to myself as I set about
+finding the ‘few lines of code’ which would unlock the file’s secrets… Let me tell you now: the Chrome source is a sprawling
+behemoth and my journey across the codebase (and on one occasion, outside of it) was long and arduous, and, when it comes down to
+it, it all boils down to understanding the "Pickle"…
+
+В предыдущих сообщениях я упоминал о полезности доступа к исходному коду, который определяет формат хранения данных, и, поскольку
+исходный код Chrome открыт, я был воодушевлен. "Это не должно быть слишком сложно", — подумал я про себя, приступая к поиску
+"несколько строк кода", которые раскроют секреты файла… Позвольте мне сказать вам сейчас: исходный код Chrome — это огромный
+монстр, и мое путешествие по нему кодовая база (и в одном случае за ее пределами) была длинной и трудной, и, когда дело доходит
+до нее, все сводится к пониманию "Pickle"…
+
+The file header was easy to track down, I headed over to the definition for session_backend (src/chrome/browser/sessions/session_backend.cc)
+where we confirm that "SNSS" is simply a file signature followed by a 32bit integer giving the version of the file, which, at the
+time of writing, should always be 1 (all data is stored little-endian). Also in this file we encounter a method named
+"AppendCommandsToFile" which appears to be responsible for writing the details into the files. The method describes that for each
+record, a 16-bit integer is written to the file giving the size in bytes of the record (not including this value), followed by
+an 8-bit "id" (which appears to relate to the ‘type’ of the record) and the contents of the "SessionCommand".
+
+Заголовок файла было легко отследить, я перешел к определению session_backend (src/chrome/browser/sessions/session_backend.cc),
+где мы подтверждаем, что "SNSS" — это просто подпись файла, за которой следует 32-битное целое число, указывающее версию файла,
+который на момент написания всегда должен быть равен 1 (все данные хранятся с прямым порядком байтов). Также в этом файле мы
+встречаем метод AppendCommandsToFile, который, судя по всему, отвечает за запись данных в файлы. Этот метод описывает, что для
+каждой записи в файл записывается 16-битное целое число, указывающее размер записи в байтах (не включая это значение), за которым
+следует 8-битный "id" (который, по-видимому, относится к "тип" записи) и содержимое "SessionCommand".
+
+So now I knew what the overview of the structure in the file was: a nice simple size, contents, size, contents, size, contents… etc.
+file format, with the records written sequentially, one after another. But I still had no information about the structure of those
+contents. SessionBackend was operating with a SessionComand object so I tracked down the source code describing this object
+(src/chrome/browser/sessions/session_command.h) but was disappointed to find the following explanation in the source code’s comments:
+
+"SessionCommand contains a command id and arbitrary chunk of data. The id and chunk of data are specific to the service creating them."
+
+OK, so the information I wanted isn’t going to be here, but the comments go on to say:
+
+"Both TabRestoreService and SessionService use SessionCommands to represent state on disk"
+
+Итак, теперь я знал, каков был обзор структуры файла: красивый простой формат файла "размер, содержимое, размер, содержимое, размер,
+содержимое… и т. д.", в котором записи записывались последовательно, одна за другой. Но у меня по-прежнему не было информации о
+структуре этого содержимого. SessionBackend работал с объектом SessionComand, поэтому я нашел исходный код, описывающий этот объект
+(src/chrome/browser/sessions/session_command.h), но был разочарован, обнаружив следующее объяснение в комментариях к исходному коду:
+
+"SessionCommand содержит идентификатор команды и произвольный фрагмент данных. Идентификатор и фрагмент данных зависят от службы,
+создающей их".
+
+Хорошо, информации, которую я хотел, здесь не будет, но в комментариях говорится:
+
+"И TabRestoreService, и SessionService используют SessionCommands для представления состояния на диске"
+
+Aha! So although I hadn’t quite found what I was looking for here, I have found a useful signpost pointing in the right direction.
+Now, neither "TabRestoreService" (src/chrome/browser/sessions/tab_restore_service.h) nor "SessionService"
+(src/chrome/browser/sessions/session_service.h) themselves give us the information we’re after, but both of them 'inherit' from a
+common base class called "BaseSessionService" (src/chrome/browser/sessions/base_session_service.cc) (I gave a brief overview of
+object oriented principals including inheritance in a previous blog post)  and it is in BaseSessionService where we finally get
+what we’re after…
+
+Ага! Итак, хотя я не нашел здесь того, что искал, я нашел полезный указатель, указывающий в правильном направлении. Теперь ни
+"TabRestoreService" (src/chrome/browser/sessions/tab_restore_service.h), ни "SessionService"
+(src/chrome/browser/sessions/session_service.h) сами по себе не предоставляют нам нужную информацию, но оба они "наследовать" от
+общего базового класса под названием "BaseSessionService" (src/chrome/browser/sessions/base_session_service.cc) (я дал краткий
+обзор объектно-ориентированных принципов, включая наследование, в предыдущем сообщении блога), и именно в BaseSessionService мы
+наконец-то получили то, что нам нужно…
+
+BaseSessionService contains a method called "CreateUpdateTabNavigationCommand" which is responsible for writing that "arbitrary
+chunk of data" into the SessionCommand which eventually gets written to disk. The record starts with a 32 bit integer which gives
+the length of the data (this is in addition to the length value outside the SessionCommand). The rest of the SessionCommand’s
+contents structure is described in the table below.
+
+BaseSessionService содержит метод CreateUpdateTabNavigationCommand, который отвечает за запись этого "произвольного фрагмента данных"
+в SessionCommand, который в конечном итоге записывается на диск. Запись начинается с 32-битного целого числа, которое определяет
+длину данных (это в дополнение к значению длины вне SessionCommand). Остальная часть структуры содержимого SessionCommand описана
+в таблице ниже.
+
+Data type 	Meaning
+32 bit Integer 	Tab ID
+32 bit Integer 	Index in this tab’s back-forward list
+ASCII String (32 bit Integer giving the length of the string in characters followed by an ASCII string of that length) 	Page URL
+UTF-16 String (32 bit Integer giving the length of the string in characters followed by a UTF-16 string of that length) 	Page Title
+Byte string (32 bit Integer giving the length of the string in bytes followed by a byte string of that length) 	“State” (A data structure provided by the WebKit engine describing the current state of the page. We will look at it in detail later)
+32 bit Integer 	Transition type (explained below)
+32 bit Integer 	1 if the page has POST data, otherwise 0
+ASCII String (see above) 	Referrer URL
+32 bit Integer 	Referrer’s Policy
+ASCII String 	Original Request URL (for example if a redirect took place)
+32 bit Integer 	1 if the user-agent was overridden, otherwise 0
+
+Тип данных Значение
+32-битный целочисленный идентификатор вкладки
+32-битный целочисленный индекс в обратном списке на этой вкладке.
+Строка ASCII (32-битное целое число, указывающее длину строки в символах, за которой следует строка ASCII той же длины) URL-адрес страницы
+Строка UTF-16 (32-битное целое число, указывающее длину строки в символах, за которой следует строка UTF-16 той же длины) Заголовок страницы
+Байтовая строка (32-битное целое число, указывающее длину строки в байтах, за которой следует строка байтов этой длины) "Состояние"
+(структура данных, предоставляемая движком WebKit, описывающая текущее состояние страницы. Мы рассмотрим ее подробно. позже)
+32-битный целочисленный тип перехода (поясняется ниже)
+32-битное целое число: 1, если страница содержит данные POST, в противном случае — 0.
+Строка ASCII (см. выше) URL-адрес реферера
+Политика реферера в 32-битных целых числах
+URL-адрес исходного запроса строки ASCII (например, если имело место перенаправление)
+32-битное целое число: 1, если пользовательский агент был переопределен, в противном случае 0.
+
+Тип данных      Значение
+32 bit Integer 	Tab ID Идентификатор вкладки
+32 bit Integer 	Index in this tab’s back-forward list Индекс в обратном списке этой вкладки
+ASCII String (32 bit Integer giving the length of the string in characters followed by an ASCII string of that length) 	Page URL
+            (32-битное целое число, указывающее длину строки в символах, за которой следует строка ASCII такой длины) URL-адрес страницы
+UTF-16 String (32 bit Integer giving the length of the string in characters followed by a UTF-16 string of that length) 	Page Title
+        (32-битное целое число, указывающее длину строки в символах, за которой следует строка UTF-16 той же длины) Заголовок страницы
+Byte string (32 bit Integer giving the length of the string in bytes followed by a byte string of that length) 	"State" (A data
+structure provided by the WebKit engine describing the current state of the page. We will look at it in detail later)
+            (32-битное целое число, указывающее длину строки в байтах, за которой следует строка байтов этой длины) "Состояние"
+            (структура данных, предоставляемая движком WebKit, описывающая текущее состояние страницы. Мы рассмотрим ее подробно позже)
+32 bit Integer 	Transition type (explained below)  Тип перехода (поясняется ниже)
+32 bit Integer 	1 if the page has POST data, otherwise 0  1, если страница имеет данные POST, в противном случае 0
+ASCII String (see above) 	Referrer URL  (см. выше) URL-адрес реферера
+32 bit Integer 	Referrer’s Policy                    Политика реферрера
+ASCII String 	Original Request URL (for example if a redirect took place)
+                URL-адрес исходного запроса (например, если имело место перенаправление)
+32 bit Integer 	1 if the user-agent was overridden, otherwise 0
+                1, если пользовательский агент был переопределен, в противном случае 0
+
+As SessionCommands contents can be populated by other means, not every Session command contains data formatted as shown above.
+During testing it was shown that it is the SessionCommand’s 8-bit ID which identifies whether the record contains this kind of
+data (when the ID was 1 or 6 then this data format was found). Those with other IDs were typically much shorter (usually
+around16-32 bytes in length) and did not appear to contain information which was of so much interest.
+
+Поскольку содержимое SessionCommands может быть заполнено другими способами, не каждая команда Session содержит данные,
+отформатированные, как показано выше. В ходе тестирования было показано, что именно 8-битный идентификатор SessionCommand определяет,
+содержит ли запись данные такого типа (когда идентификатор был 1 или 6, тогда был найден этот формат данных). Те, у кого были другие
+идентификаторы, обычно были намного короче (обычно около 16–32 байтов) и, похоже, не содержали информации, которая представляла
+бы такой большой интерес.
+
+There are a few fields in the table above which are worth taking a closer look at; the "State" field we’ll explore in detail later
+as it’s a complicated one. The "Transition type" is a little easier to explain; this field tells Chrome how the page was
+arrived at. The field will be an integer number, the meaning of which is described in the tables below. The value is essentially
+split into two sections: the least significant 8-bits of the integer give a type of transition and the most-significant 24-bits
+form a bit-mask which gives other details. These details are gathered from page_transition_types (content/public/common/page_transition_types.h).
+
+В таблице выше есть несколько полей, на которые стоит обратить внимание; Поле "Состояние" мы подробно рассмотрим позже, поскольку
+оно сложное. "Тип перехода" объяснить немного проще; это поле сообщает Chrome, как была получена страница. Поле будет представлять
+собой целое число, смысл которого описан в таблицах ниже. Значение по существу разделено на две части: младшие 8 бит целого числа
+определяют тип перехода, а старшие 24 бита образуют битовую маску, которая дает другие детали. Эти сведения собираются из
+page_transition_types (content/public/common/page_transition_types.h).
+
+Least Significant 8-bits
+      Value (Значение)               Meaning (его смысл)
+0 	User arrived at this page by clicking a link on another page
+    Пользователь попал на эту страницу, перейдя по ссылке на другой странице.
+1 	User typed URL into the Omnibar, or clicked a suggested URL in the Omnibar
+    Пользователь ввел URL-адрес в омнибар или щелкнул предложенный URL-адрес в омнибаре.
+2 	User arrived at page through a  bookmark or similar (eg. "most visited" suggestions on a new tab)
+    Пользователь перешел на страницу через закладку или что-то подобное (например, "самые посещаемые" предложения на новой вкладке)
+3 	Automatic navigation within a sub frame (eg an embedded ad)
+    Автоматическая навигация внутри подкадра (например, встроенное объявление)
+4 	Manual navigation in a sub frame
+    Ручная навигация в подкадре
+5 	User selected suggestion from Omnibar (ie. typed part of an address or search term then selected a suggestion which was not a URL)
+    Пользователь выбрал предложение из Omnibar (то есть, набрал набрал часть адреса или условия поиска, а затем выбрал предложение,
+    которое не было URL-адресом).
+6 	Start page (or specified as a command line argument)
+    Стартовая страница (или указанная в качестве аргумента командной строки)
+7 	User arrived at this page as a result of submitting a form
+    Пользователь попал на эту страницу в результате отправки формы.
+8 	Page was reloaded; either by clicking the refresh button, hitting F5 or hitting enter in the address bar. Also given this
+    transition type if the tab was opened as a result of restoring a previous session.
+    Страница была перезагружена; либо нажав кнопку обновления, нажав F5 или нажав Enter в адресной строке. Также указан этот тип
+    перехода, если вкладка была открыта в результате восстановления предыдущего сеанса.
+9 	Generated as a result of a keyword search, not using the default search provider (for example using tab-to-search on Wikipedia).
+    Additionally a transition of type 10 (see below) may also be generated for the url: http:// + keyword
+    Создано в результате поиска по ключевым словам без использования поставщика поиска по умолчанию (например, с использованием
+    поиска с вкладками в Википедии). Дополнительно для URL-адреса также может быть сгенерирован переход типа 10 (см. ниже):
+    http:// + ключевое слово
+10 	See above  См. выше
+Bit mask 	Meaning
+Битовая маска  Значение
+0x01000000 	User used the back or forward buttons to arrive at this page
+            Пользователь использовал кнопки "Назад" или "Вперед", чтобы перейти на эту страницу.
+0x02000000 	User used the address bar to trigger this navigation
+            Пользователь использовал адресную строку для запуска этой навигации.
+0x04000000 	User is navigating to the homepage
+            Пользователь переходит на домашнюю страницу.
+0x10000000 	The beginning of a navigation chain
+            Начало навигационной цепочки
+0x20000000 	Last transition in a redirect chain
+            Последний переход в цепочке перенаправлений
+0x40000000 	Transition was a client-side redirect (eg. caused by JavaScript or a meta-tag redirect)
+            Переход был перенаправлением на стороне клиента (например, вызванным JavaScript или перенаправлением метатега).
+0x80000000 	Transition was a server-side redirect (ie a redirect specified in the HTTP response header)
+            Переход был перенаправлением на стороне сервера (т. е. перенаправлением, указанным в заголовке ответа HTTP).
+
+NB during testing, although the transition types looked correct in the "Current Session" and "Last Session" files, in the
+"Current Tabs" and "Last Tabs" files the transition type was always recorded as type 8 (Reloaded page).
+
+When it comes to the record structure, there is still a little more to the story, and yes, this is where the Pickles come in.
+
+Обратите внимание, что во время тестирования, хотя типы перехода в файлах "Текущий сеанс" и "Последний сеанс" выглядели правильно,
+в файлах "Текущие вкладки" и "Последние вкладки" тип перехода всегда записывался как тип 8 (Перезагруженная страница).
+
+Когда дело доходит до структуры пластинки, в этой истории есть еще кое-что, и да, именно здесь вступают в игру Пиклз.
+
+This data structure is not being written directly to a file, but rather to what Chrome calls a "Pickle" (src/base/pickle.h). A
+Pickle is a sort of 'managed buffer'; a way for Chrome to write (and read) a bunch of values, like those in the tables above,
+into an area of memory in a controlled way. Indeed, the "length-value" structure we see with the strings is down to the way
+Pickles write strings into memory, as is the, apparently superfluous, extra ‘length’ field at the start of the record structure.
+One other pickle-related side-effect which isn’t necessarily immediately obvious when you look at the data in a hex editor is
+that pickles will always write data so it is uint32-aligned. This means that data will always occupy blocks of 4 bytes and if
+needed (such as in the case of strings) will be padded to ensure that the next data begins at the start of the next 4-byte block.
+
+Эта структура данных не записывается непосредственно в файл, а скорее в то, что Chrome называет "Pickle" (src/base/pickle.h).
+Pickle — это своего рода "управляемый буфер"; способ для Chrome записывать (и читать) набор значений, подобных приведенным в
+таблицах выше, в область памяти контролируемым образом. Действительно, структура "длина-значение", которую мы видим в строках,
+связана с тем, как Пиклз записывает строки в память, как и, по-видимому, лишнее дополнительное поле "длина" в начале структуры
+записи. Еще один побочный эффект, связанный с Pickle, который не обязательно сразу бросается в глаза, когда вы смотрите на данные
+в шестнадцатеричном редакторе, заключается в том, что Pickles всегда записывают данные так, чтобы они были выровнены по uint32.
+Это означает, что данные всегда будут занимать блоки по 4 байта и при необходимости (например, в случае строк) будут дополняться,
+чтобы гарантировать, что следующие данные начнутся с начала следующего 4-байтового блока.
+
+It turns out that the contents of the mysterious "State" field are also governed by a Pickle. This field contains serialised data
+from the WebKit engine. The data is held in a "NavigationEntry" (content/public/browser/navigation_entry.h) "content state" field,
+but is originally populated by glue_serialize  (webkit/glue/glue_serialize.cc). It duplicates some of the data that we have already
+described from the outer record, but also contains some more detailed information regarding the state of the page, not least the
+contents of any forms on the page. The code describing the serialisation process is found in glue_serialize in the WriteHistoryItem
+method.
+
+Оказывается, содержимым загадочного поля "Состояние" также управляет Пикл. Это поле содержит сериализованные данные из механизма
+WebKit. Данные хранятся в "NavigationEntry" (content/public/browser/navigation_entry.h), в поле "Состояние содержимого", но
+изначально заполняются с помощью Glue_serialize (webkit/glue/glue_serialize.cc). Он дублирует некоторые данные, которые мы уже
+описали из внешней записи, но также содержит некоторую более подробную информацию о состоянии страницы, не в последнюю очередь о
+содержимом любых форм на странице. Код, описывающий процесс сериализации, находится в Glue_serialize метода WriteHistoryItem.
+
+The state byte string begins with a 32 bit Integer giving the length of the rest of the record (this is in addition to the length
+defined in the outer record structure) and then continues with the "WebHistoryItem" structure shown in the table below:
+
+Строка байтов состояния начинается с 32-битного целого числа, указывающего длину остальной части записи (это в дополнение к длине,
+определенной во внешней структуре записи), а затем продолжается структурой "WebHistoryItem", показанной в таблице ниже:
+
+Data type 	Meaning
+Тип данных  Значение
+32 bit Integer 	Format Version
+                Версия формата
+String (see below) 	Page URL
+       (см. ниже)   URL-адрес страницы
+String (see below) 	Original URL (for example if a redirect took place)
+       (см. ниже)   Исходный URL-адрес (например, если имело место перенаправление)
+String (see below) 	Page target
+       (см. ниже)   Целевая страница
+String (see below) 	Page parent
+       (см. ниже)   Родительская страница
+String (see below) 	Page title
+       (см. ниже)   Название страницы
+String (see below) 	Page alternative title
+       (см. ниже)   Альтернативное название страницы
+Floating point number (see below) 	Last visited time
+Число с плавающей запятой (см. ниже)  Время последнего посещения
+32 bit Integer 	X scroll offset
+                Смещение прокрутки по оси X
+32 bit Integer 	Y scroll offset
+                Смещение прокрутки по оси Y
+32 bit Integer 	1 if this is a target item otherwise 0
+                1, если это целевой элемент, в противном случае 0
+32 bit Integer 	Visit count
+                Количество посещений
+String (see below) 	Referrer URL
+       (см. ниже)   URL-адрес реферера
+String Vector (see below) 	 Document state (form data) – explained in more detail below
+Строковый вектор (см. ниже)  Состояние документа (данные формы) – более подробно описано ниже.
+Floating point number (see below) 	Page scale factor (Only present if the version field is greater than or equal to 11)
+Число с плавающей запятой (см. ниже) Коэффициент масштабирования страницы (присутствует только в том случае, если поле версии больше или равно 11).
+64 bit Integer 	"Item sequence number" (Only present if the version field is greater than or equal to 9)
+                "Порядковый номер элемента" (присутствует только в том случае, если поле версии больше или равно 9)
+64 bit Integer 	"Document sequence number" (Only present if the version field is greater than or equal to 6)
+                "Порядковый номер документа" (присутствует только в том случае, если поле версии больше или равно 6)
+32 bit Integer 	1 if there is a "state object" otherwise 0 (Only present if the version field is greater than or equal to 7)
+                1, если существует "объект состояния", в противном случае 0 (присутствует только в том случае, если поле версии больше
+                или равно 7)
+String (see below) 	"State Object" (only present if the value above is 1 and the version field is greater than or equal to 7)
+       (см. ниже)   "Объект состояния" (присутствует, только если значение выше равно 1, а поле версии больше или равно 7)
+Form data (see below) 	Form data
+Данные формы (см. ниже)  Данные формы
+String (see below) 	HTTP content type
+       (см. ниже)   Тип контента HTTP
+String (see below) 	Referrer URL (again, for backwards compatibility apparently)
+       (см. ниже)   URL-адрес реферера (опять же, очевидно, для обратной совместимости)
+32 bit Integer 	Number of sub-items in the field below
+                Количество подпунктов в поле ниже
+WebHistoryItem Vector (see below) 	A number of sub items (for example embedded frames). Each record has the same structure as this one
+Вектор WebHistoryItem (см. ниже)    Несколько подэлементов (например, встроенные фреймы). Каждая запись имеет ту же структуру, что и эта.
+
+That table has a lot of "See below" in it, so let’s get down to explaining some of the subtleties/oddities that this data structure provides.
+
+В этой таблице много слов "См. ниже", поэтому давайте приступим к объяснению некоторых тонкостей/странностей, которые предоставляет эта
+структура данных.
+
+Strings: strings are actually stored differently to those in the outer record. Despite the fact that the data is still being written
+into a Pickle, the source code uses a different mechanism to do so. The source code forsakes the Pickle’s built in string
+serialisation methods (for reasons best known to the Chrome programmers), instead taking a more direct route of writing the length
+of the string directly, followed by the in-memory representation of the string. Basically, this results in the string fields
+comprising a 32-bit Integer giving the length of the string followed by a UTF-16 string only, this time the length refers to the
+length in bytes, not the length in characters. To further confuse matters, if the length is -1 (0xFFFFFFFF) this indicates that
+the string is not present (or 'null' in programming terms) or un-initialised (and therefore empty). There is an exception to this
+structure: if the version field is 2, where, as the comments in the source code suggest, the format was "broken" and stored the
+number of characters, this was fixed in version 3 onwards.
+
+Строки: строки на самом деле хранятся иначе, чем во внешней записи. Несмотря на то, что данные все еще записываются в Pickle,
+исходный код использует для этого другой механизм. В исходном коде отсутствуют встроенные методы сериализации строк Pickle.
+(по причинам, наиболее известным программистам Chrome), вместо этого выбираем более прямой путь прямой записи длины строки с
+последующим представлением строки в памяти. По сути, это приводит к тому, что строковые поля содержат 32-битные значения. Целое
+число, указывающее длину строки, за которой следует только строка UTF-16, на этот раз длина относится к длине в байтах, а не к
+длине в символах. Чтобы еще больше запутать ситуацию, если длина равна -1 (0xFFFFFFFF), это означает, что. строка отсутствует
+(или имеет значение null в терминах программирования) или не инициализирована (и, следовательно, пуста). В этой структуре есть
+исключение: если поле версии равно 2, где, как следует из комментариев в исходном коде, формат был "сломан" и сохранял количество
+символов, это было исправлено в версии 3 и далее.
+
+String Vector: "Vector" in this case essentially means 'List'. The vector begins with a 32-bit Integer giving the number of
+entries in the list which is then followed by that many strings in the format described above. In the data structure above this
+is used to serialise what is described as the "document state". In testing this appeared to contain information regarding any form
+fields that may be present on the page (including hidden fields). The list of strings can be broken up into groups of 3 strings,
+the first of which gives the name of the form field, the second the type of field and the third the current contents of the field.
+
+Вектор строки: "Вектор" в данном случае по сути означает "Список". Вектор начинается с 32-битного целого числа, указывающего
+количество записей в списке, за которым затем следует такое же количество строк в формате, описанном выше. Выше это используется
+для сериализации того, что описано как "состояние документа". При тестировании оно содержало информацию о любых полях формы,
+которые могут присутствовать на странице (включая скрытые поля). Список строк можно разбить на группы из трех строк, первая из
+которых задает имя поля формы, вторая — тип поля, а третья — текущее содержимое поля.
+
+Floating Point Numbers: IEEE 754 double-precision floating point numbers are used as a representation, but Pickles do not directly
+support this data type. Because of this, the code uses the Pickle’s "WriteData" method, passing the internal, in-memory
+representation of the floating point number into the Pickle. The upshot of using the "WriteData" method is that the 64-bit
+floating point number is prefaced with a 32-bit integer giving the length of the data (which will always be 8 for a
+double-precision float).
+
+Числа с плавающей запятой: в качестве представления используются числа с плавающей запятой двойной точности IEEE 754, но Pickles
+напрямую не поддерживает этот тип данных. Из-за этого код использует метод Pickle "WriteData", передавая внутреннее представление
+в памяти числа с плавающей запятой в Pickle. Результатом использования метода WriteData является то, что 64-битному числу с
+плавающей запятой предшествует 32-битное целое число, указывающее длину данных (которое всегда будет равно 8 для числа с плавающей
+запятой двойной точности).
+
+Form Data: the (slightly convoluted) format for this data serialisation is detailed in the WriteFormData method in glue_serialize,
+however across testing this data was never populated so I can’t vouch for its contents.
+
+Данные формы: (слегка запутанный) формат для этой сериализации данных подробно описан в методе WriteFormData в Glue_serialize,
+однако во время тестирования эти данные ни разу не заполнялись, поэтому я не могу ручаться за их содержимое.
+
+Sub items: this contains further WebHistoryItems for any embedded pages or resources on the page. During testing I saw it used to
+store details of adverts, Facebook "like" buttons and so on. The structure for these sub items is identical to the structure
+described in the table (note, however, that unlike the top-level WebHistoryItem they do not begin with a size value).
+
+Подэлементы: содержат дополнительные элементы WebHistoryItems для любых встроенных страниц или ресурсов на странице. Во время
+тестирования я видел, что он используется для хранения сведений о рекламе, кнопках "Нравится" Facebook и т. д. Структура этих
+подэлементов идентична описанной в таблице (однако обратите внимание, что в отличие от WebHistoryItem верхнего уровня они не
+начинаются со значения размера).
+
+So that’s the structure of the file – not the most pleasant file format I’ve ever dealt with and, even with the source code on
+hand, it was a lengthy task. So was it worth it?
+
+Итак, вот структура файла — не самый приятный формат файла, с которым мне когда-либо приходилось иметь дело, и даже с исходным
+кодом это была длительная задача. Так стоило ли оно того?
+
+Well first the case against: a lot of the data is duplicated in other places, not least the History database (which is SQLite so
+much nicer to work with), and between the "Current" and "Last" versions of the files you only have information regarding 2 sessions
+worth of browsing, although, increasingly in today’s "always-on" culture, this could still account for a significant period of
+browsing. Which brings me to the other significant disappointment for these files – timestamps (or rather the apparent lack of them);
+of course, this makes perfect sense when you consider what Chrome needs the files for – timestamps simply aren’t required for
+restoring sessions, all the same, it’d make the file more useful to us if they were there.
+
+Ну, во-первых, аргумент против: многие данные дублируются в других местах, не в последнюю очередь в базе данных истории (с которой
+SQLite гораздо приятнее работать), и между "Текущей" и "Последней" версиями файлов вы только У меня есть информация о двух сеансах
+просмотра, хотя в сегодняшней культуре "всегда включено" это все равно может составлять значительный период просмотра, что приводит
+меня к другому значительному разочарованию для этих файлов - меткам времени (вернее, явное их отсутствие); конечно, это
+вполне логично, если учесть, для чего Chrome нужны файлы — временные метки просто не нужны для восстановления сеансов, тем не
+менее, если бы они там были, файл был бы для нас более полезным.
+
+But it’s not all doom and gloom (which is lucky, otherwise this blog post would be a bit of a waste of time). Firstly, although we
+only have 2 sessions worth of browsing live on the system, colleagues have already demonstrated to me that there is plenty of
+scope for recovering previous examples of the files – especially from volume shadow copies, and the 8-byte long static header
+means that carving files from unallocated space may be possible (no footer though, so some judgement would need to be made
+regarding the length of the files). Probably more importantly these files give us access to information which it would be tricky
+to acquire otherwise (or at the very least another opportunity to recover information which may have been deleted); the form
+contents are obviously a nice additional source of intelligence, both in terms of user credentials, email addresses and possibly
+message contents (I was able to recover Facebook chat messages from the form data in the "document state" for example). Also,
+the presence of the transition types, referrer and requested URL fields means that you can build up detailed browsing behaviour
+profiles, tracking the movement between sites and tabs.
+
+Но не все так мрачно (и это к счастью, иначе этот пост в блоге был бы пустой тратой времени). Во-первых, хотя у нас есть только 2
+сеанса просмотра в реальном времени в системе, коллеги уже продемонстрировали мне, что существует множество возможностей для
+восстановления предыдущих примеров файлов – особенно из теневых копий тома, а статический заголовок длиной 8 байт означает, что
+может быть возможным вырезание файлов из нераспределенного пространства (хотя нижнего колонтитула нет, поэтому необходимо сделать
+некоторое суждение относительно длины файлов). Вероятно, что еще более важно, эти файлы дают нам доступ к информации, которую
+было бы сложно получить другим способом (или, по крайней мере, еще одну возможность восстановить информацию, которая, возможно,
+была удалена); хороший дополнительный источник информации, как с точки зрения учетных данных пользователя, адресов электронной
+почты, так и, возможно, содержимого сообщений (например, мне удалось восстановить сообщения чата Facebook из данных формы в
+"состоянии документа"). Поля , реферер и запрошенный URL-адрес означают, что вы можете создавать подробные профили поведения
+при просмотре, отслеживая перемещение между сайтами и вкладками.
+
+This is not a file format that I would want to parse by hand again, so to automate the process I have written a Python script
+which we’re happy to make available to the forensics community. The script is designed both as a command line tool which generates
+a simple HTML report and a class library in case anyone wishes to integrate it into other tools (or create a different reporting
+format). You can download the script from http://code.google.com/p/ccl-ssns/.
+
+As always, if you have any comments or questions you can get in touch in the comments or by emailing research@ccl-forensics.com
+
+Alex Caithness
+
+Это не тот формат файла, который я хотел бы снова анализировать вручную, поэтому для автоматизации процесса я написал сценарий
+Python, который мы рады предоставить сообществу криминалистов. Сценарий спроектирован как инструмент командной строки, который
+генерирует простой HTML-отчет и библиотеку классов на случай, если кто-то захочет интегрировать его в другие инструменты (или
+создать другой формат отчета). Вы можете скачать сценарий по адресу http://code.google.com/p/ccl-ssns.
+
+Как всегда, если у вас есть какие-либо комментарии или вопросы, вы можете связаться с ними в комментариях или по электронной
+почте Research@ccl-forensics.com. Алекс Кейтнесс
+
+https://digitalinvestigation.wordpress.com/2012/09/03/chrome-session-and-tabs-files-and-the-puzzle-of-the-pickle/
+
+Reverse Engineering SSNS Format
+Jean-Rémy Bancel edited this page Mar 29, 2018 · 1 revision
+
+Реверс-инжиниринг формата SSNS
+Жан-Реми Бансель отредактировал эту страницу 29 марта 2018 г. · 1 редакция
+
+Why ?
+
+At least the following list of file uses this format
+
+    Current Session
+    Current Tabs
+    Last Session
+    Last Tabs
+
+These files stores everything related to tabs and session state. It is a very rich source of information for forensic investigations.
+It seems that no open source software is available to parse this format, so I started working on it.
+
+Почему?
+
+По крайней мере, следующий список файлов использует этот формат.
+
+    Текущая сессия
+    Текущие вкладки
+    Последняя сессия
+    Последние вкладки
+
+В этих файлах хранится все, что связано с вкладками и состоянием сеанса. Это очень богатый источник информации для криминалистических
+расследований. Похоже, что нет программного обеспечения с открытым исходным кодом для анализа этого формата, поэтому я начал над
+ним работать.
+
+Architecture
+
+A SSNS file is a Header and a list of SessionCommand.
+Header
+
+It is defined in chrome/browser/sessions/session_backend.cc.
+
+struct FileHeader {
+    int32 signature;
+    int32 version;
+};
+
+signature is a magic number used to identify the format.
+
+static const int32 kFileSignature = 0x53534E53;
+
+version is the version number of the format used for compatibility reasons.
+
+static const int32 kFileCurrentVersion = 1;
+
+Архитектура
+
+Файл SSNS представляет собой заголовок и список SessionCommand.
+Заголовок
+
+Он определен в chrome/browser/sessions/session_backend.cc.
+
+struct FileHeader {
+    int32 signature;
+    int32 version;
+};
+
+signature — это магическое число, используемое для идентификации формата.
+
+статическая константа int32 kFileSignature = 0x53534E53;
+
+версия — это номер версии формата, используемого из соображений совместимости.
+
+статическая константа int32 kFileCurrentVersion = 1;
+
+Session Command
+
+It is described in chrome/browser/sessions/session_command.h.
+
+// SessionCommand contains a command id and arbitrary chunk of data. The id
+// and chunk of data are specific to the service creating them.
+
++------------+--------------+
+| Command Id |    Content   |
++------------+--------------+
+ <= 8 bits => <= Variable =>
+
+    Command Id is uint8
+    Content can be raw data (mmap of a C structure) or a Pickle (serialized data)
+
+Storage
+
+Of course, when the file is read the size of each SessionCommand is needed. That is why the size of the command is written just
+before the command in the file on 16 bits (uint16).
+
++--------------+------------+--------------+
+| Command Size | Command Id |    Content   |
++--------------+------------+--------------+
+ <= 16 bits  => <= 8 bits => <= Variable =>
+
+Given these informations it is trivial to extract a list a commands from a SNSS file. The hardest part is to give a meaning to
+these commands.
+
+Команда сеанса
+
+Это описано в chrome/browser/sessions/session_command.h.
+
+// SessionCommand содержит идентификатор команды и произвольный фрагмент данных.
+// и фрагменты данных зависят от создающего их сервиса.
+
++----------------+--------------+
+Идентификатор команды Command Id| Content
++----------------+--------------+
+ <= 8 бит => <= Variable =>
+
+    CommandId это uint8.
+    Содержимое может быть необработанными данными (mmap из С структуры) или Pickle (сериализованные данные).
+
+Хранилище
+
+Конечно, при чтении файла необходим размер каждой SessionCommand. Именно поэтому размер команды записывается непосредственно
+перед командой в файле на 16 битах (uint16).
+
++-------------+----------------+-------------+
+Размер команды CommandSize| Command Id | Содержимое Content |
++-------------+----------------+-------------+
+ <= 16 бит => <= 8 бит => <= Переменная =>
+
+Учитывая эту информацию, легко извлечь список команд из файла SNSS. Самое сложное — придать смысл этим командам.
+
+Parsing SessionCommand
+
+As said in the description SessionCommand structure is a general purpose structure : its content can be anything. Nevertheless,
+there are two main categories of content :
+
+    The content mapped from a C structure
+    A Pickle (serialized object)
+
+Команда синтаксического анализа
+
+Как сказано в описании, структура SessionCommand является структурой общего назначения: ее содержимое может быть любым. Тем не
+менее, существует две основные категории контента:
+
+    Содержимое, отображаемое из C структуры
+    Pickle (сериализованный объект)
+
+Content mapped from a C structure
+
+You need to identify the structure in the code associated with the Command Id. For exemple a CommandTabClosed uses the ClosedPayload
+structure defined as follow in chrome/browser/sessions/session_service.cc:
+
+struct ClosedPayload {
+   SessionID::id_type id;
+   int64 close_time;
+};
+struct IDAndIndexPayload {
+   SessionID::id_type id;
+   int32 index;
+};
+
+SessionID::id_type is defined in chrome/browser/sessions/session_command.h:
+
+typedef uint8 id_type;
+
+There are plenty of such structure defined in chrome/browser/sessions/session_service.cc.
+
+Содержимое, сопоставленное из структуры C
+
+Вам необходимо определить структуру в коде, связанную с идентификатором команды. Например, CommandTabClosed использует структуру
+ClosedPayload, определенную в chrome/browser/sessions/session_service.cc:
+
+struct ClosedPayload {
+   SessionID::id_type id;
+   int64 close_time;
+};
+struct IDAndIndexPayload {
+   SessionID::id_type id;
+   int32 index;
+};
+
+SessionID::id_type определяется в chrome/browser/sessions/session_command.h:
+
+typedef uint8 id_type;
+
+В chrome/browser/sessions/session_service.cc определено множество таких структур.
+
+Alignment
+
+It took some time to realize that because of memory alignment a structure like IDAndIndexPayload takes 8Bytes and not 6Bytes.
+
+A strange thing is the following structures being mapped on 8Bytes and not 4Bytes as I would have expected it. Maybe I missed
+something.
+
+SessionID::id_type payload[] = { window_id.id(), tab_id.id() };
+
+struct PinnedStatePayload {
+   SessionID::id_type tab_id;
+   bool pinned_state;
+};
+
+
+Выравнивание
+
+Потребовалось некоторое время, чтобы понять, что из-за выравнивания памяти такая структура, как IDAndIndexPayload, занимает 8 байт,
+а не 6 байт.
+
+Странно то, что следующие структуры отображаются на 8 байт, а не на 4 байта, как я ожидал. Возможно, я что-то пропустил.
+
+SessionID::id_type payload[] = { window_id.id(), tab_id.id() };
+
+struct PinnedStatePayload {
+   SessionID::id_type tab_id;
+   bool pinned_state;
+};
+
+Content as a Pickle
+
+Everything needed to understand how pickle object are designed is in base/pickle.*.
+Header
+
+struct Header {
+    uint32 payload_size;
+};
+
+The payload size is defined in the header in order to have a customizable header size. Indeed, the payload offset in raw data is
+pickle_size - payload_size.
+Data
+
+Every basic type can be written in a Pickle : Boolean, Int, String, etc... Simple types are directly written and Strings are
+preceded by their size. A pickle storing an Int, a String and a Boolean looks like that :
+
++-----+-------------+--------+------+
+| Int | String Size | String | Bool |
++-----+-------------+--------+------+
+
+Every object smaller than 32 bits is written on 32 bits. It has to be taken into account while reading (reading uint8, uint16 for
+example).
+
+Content как Pickle
+
+Все необходимое для понимания того, как устроен объект Pickle, находится в base/pickle.*.
+Заголовок
+
+Заголовок структуры {
+    uint32 payload_size;
+};
+
+Размер полезной нагрузки определяется в заголовке, чтобы иметь настраиваемый размер заголовка. Действительно, смещение полезной
+нагрузки в необработанных данных составляет Pickle_size — payload_size.
+
+Данные
+
+Каждый базовый тип может быть записан в Pickle: Boolean, Int, String и т. д. Простые типы записываются напрямую, и строкам
+предшествует их размер. Pickle, хранящий Int, String и Boolean, выглядит следующим образом:
+
++-----+-------------+--------+------+
+| Int | String Size | String | Bool
++-----+-------------+--------+------+
+
+Каждый объект размером менее 32 бит записывается на 32 бита. Это необходимо учитывать при чтении (например, при чтении uint8, uint16).
+
+CommandUpdateTabNavigation
+
+This command uses a pickle object. I have implemented a basic pickle parser. It half works : I can read correctly two integers and
+a string. Then there is a String16. It is a String where characters are stored on 16bits. I am not sure if it is like utf-16.
+Decoding as utf-16 using Python works most of the time...
+
+The current problem is that the number giving the size of the string is sometimes obviously wrong : for example the size is bigger
+than the size of the Pickle payload itself... I don't know where it comes from.
+
+For the moment I am able to retrieve :
+
+    Tab ID
+    Index
+    Url in the tab
+    Sometimes the title
+
+Here is an example from my Current Session file.
+
+КомандаUpdateTabNavigation
+
+Эта команда использует объект Pickle. Я реализовал базовый анализатор Pickle. Он наполовину работает: я могу правильно прочитать два
+целых числа и строку. Затем есть String16. Это строка, в которой символы хранятся в 16 битах. Я не уверен, что это похоже на utf-16.
+Декодирование в формате utf-16 с использованием Python работает большую часть времени...
+
+Текущая проблема заключается в том, что число, обозначающее размер строки, иногда явно неверно: например, размер больше, чем размер
+самой полезной нагрузки Pickle... Я не знаю, откуда оно взялось.
+
+На данный момент я могу получить:
+
+    Идентификатор вкладки
+    Индекс
+    URL на вкладке
+    Иногда название
+
+Вот пример из моего файла текущей сессии.
+
+dataSize: 1258, payloadSize: 1254, payloadStart: 4
+Tab Id: 150
+Index: 3
+Url: http://www.freebsd.org/cgi/cvsweb.cgi/ports/www/py-mechanize/
+Title: None
+----------------------------
+dataSize: 6513, payloadSize: 6509, payloadStart: 4
+Tab Id: 206
+Index: 2
+Url: http://code.activestate.com/recipes/410662-a-function-to-check-if-a-number-is-prime/
+Title: A function to check if a number is prime « Python recipes « ActiveState Code
+----------------------------
+dataSize: 6604, payloadSize: 6600, payloadStart: 4
+Tab Id: 206
+Index: 3
+Url: http://www.programme-tv.net/
+Title: Votre programme TV avec Télé Loisirs : le programme télévision grandes chaînes, TNT et câble
+----------------------------
+dataSize: 11528, payloadSize: 11524, payloadStart: 4
+Tab Id: 206
+Index: 4
+Url: http://www.programme-tv.net/programme/programme-tnt.html
+Title: Programme TNT : les 18 chaînes du programme TV TNT
+
+My current goal is to understand why the size of the second string is wrong.
+Test
+
+You can test the current state of the project in the SNSS branch :
+
+    python chromagnonSession.py ~/.config/chromium/Default/Current\ Session
+
+    python chromagnonTab.py ~/.config/chromium/Default/Current\ Tabs
+
+Моя текущая цель — понять, почему размер второй строки неправильный.
+
+Тест
+
+Текущее состояние проекта вы можете протестировать в ветке SNSS:
+
+    python chromagnonSession.py ~/.config/chromium/Default/Current\ Session
+
+    python chromagnonTab.py ~/.config/chromium/Default/Current\ Tabs
+
+https://github.com/JRBANCEL/Chromagnon/wiki/Reverse-Engineering-SSNS-Format

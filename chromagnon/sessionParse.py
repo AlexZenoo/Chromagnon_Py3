@@ -301,10 +301,13 @@ class CommandTabNavigationPathPrunedFromFront():
 class CommandSetPinnedState():
     """
     Set Pinned State
+    Установка закреплённого состояния?
     """
     def __init__(self, content):
         # Content is Tab ID on 8bits and Pinned State on 8bits
+        # Content это Tab ID в 8 битах и Pinned State в 8 битах.
         # Strange alignment : two uint8 takes 8bits...
+        # Странное выравнивание: два uint8 занимают 8 бит.
         self.tabId = struct.unpack(types.uint32, content.read(4))[0]
         self.pinned = struct.unpack(types.uint32, content.read(4))[0]
 
@@ -315,6 +318,7 @@ class CommandSetPinnedState():
 class CommandSetExtensionAppID():
     """
     TODO
+    Задача!
     """
     def __init__(self, content):
         self.content = pickle.Pickle(content)
@@ -328,6 +332,7 @@ class CommandSetExtensionAppID():
 class CommandSetWindowBounds3():
     """
     Set Window size, position and state
+    Установка размера, положения и состояния окна.
     """
     def __init__(self, content):
         # Content is
@@ -335,6 +340,11 @@ class CommandSetWindowBounds3():
         #   x, y, w, h on 32bits
         #   state on 32bits
         # Alignment : Window Id is in the first 32bits
+        # Content это
+        # Window ID в 8 битах
+        # x, y, w, h в 32 битах
+        # состояние/положение в 32 битах
+        # Выравнивание: Window ID в первых 32 битах.
         self.windowId = struct.unpack(types.uint32, content.read(4))[0]
         self.x = struct.unpack(types.int32, content.read(4))[0]
         self.y = struct.unpack(types.int32, content.read(4))[0]
